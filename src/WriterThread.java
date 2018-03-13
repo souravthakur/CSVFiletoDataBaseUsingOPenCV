@@ -18,7 +18,24 @@ public class WriterThread implements Runnable {
 	long threadHashCode;
 	HashMap<Long, int[]> threadStatus;
 	int start,end;
-	private void serialize()
+	private synchronized void errorinfo(Connection con,Exception e,int rownum)
+	{
+		PreparedStatement ps=null;
+		try {
+			ps=con.prepareStatement("insert into errormsg values(?,?)");
+			ps.setInt(1, rownum);
+			ps.setString(2, e.getMessage());
+			if(ps.executeUpdate()==1)
+			{
+				System.out.println("Error Msg Inserted");
+			}
+		} catch (SQLException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		}
+		
+	}
+	private synchronized void serialize()
 	{
 		FileOutputStream fileOut;
 		try {
@@ -62,7 +79,7 @@ public class WriterThread implements Runnable {
 			    }
 			    catch (SQLException e) {
 					// TODO Auto-generated catch block
-			    	e.printStackTrace();
+			    	errorinfo(con,e,(int) i);
 				}
 			    finally {
 			    	try {
@@ -75,6 +92,7 @@ public class WriterThread implements Runnable {
 			    	catch (SQLException e) {
 						// TODO Auto-generated catch block
 				   		e.printStackTrace();
+				   		errorinfo(con,e,(int) i);
 					}
 			    	
    				} 
@@ -82,6 +100,7 @@ public class WriterThread implements Runnable {
 	   	}catch (Exception e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
+			errorinfo(con,e,start);
    		}
  		finally 
  		{
@@ -97,6 +116,7 @@ public class WriterThread implements Runnable {
  			} catch (SQLException e) {
  				// TODO Auto-generated catch block
  				e.printStackTrace();
+ 				errorinfo(con,e,start);
  			} catch (IOException e) {
  				// TODO Auto-generated catch block
  				e.printStackTrace();
