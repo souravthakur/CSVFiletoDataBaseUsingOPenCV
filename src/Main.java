@@ -38,8 +38,8 @@ public class Main {
 	}
 	private static final int NO_OF_CORES=2;
 	@SuppressWarnings("unchecked")
-	private static boolean deSerialize(HashMap<Long, int[]> prevThreadStatus) {
-		boolean status=false;
+	private static HashMap<Long, int[]> deSerialize() {
+		HashMap<Long, int[]> prevThreadStatus=null;
 		File file=new File("ser_files/write_record.ser");
 		if(file.exists())
 		{
@@ -49,6 +49,7 @@ public class Main {
 				prevThreadStatus = (HashMap<Long, int[]>) in.readObject();
 				in.close();
 				fileIn.close();
+				
 			} catch (FileNotFoundException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
@@ -59,15 +60,16 @@ public class Main {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
-			status=true;
+			
 		}
-		return status;
+		
+		return prevThreadStatus;
 	}
-	@SuppressWarnings("null")
 	public static void main(String[] args) {
 		// TODO Auto-generated method stub
-		HashMap<Long, int[]> prevThreadStatus=null;
+		HashMap<Long, int[]> prevThreadStatus=deSerialize();
 		String fileName="doc/pg5.csv";
+		Scanner sc=new Scanner(System.in);
 		MutableInt numRecords = new MutableInt();
 		MutableInt numPage=new MutableInt();
 		MutableInt remRecords=new MutableInt();
@@ -75,20 +77,17 @@ public class Main {
 		HashMap<Long,int[]> threadStatus=new HashMap<Long,int[]>();
 		ExecutorService execService=Executors.newFixedThreadPool(NO_OF_CORES);
 		int start,end;
-		System.out.print("Enter Number of Thread:");
-		Scanner sc=new Scanner(System.in);
-		int numOfThread=sc.nextInt();
 		Instant starttime = Instant.now();
-		if(deSerialize(prevThreadStatus))
+		if(prevThreadStatus!=null)
 		{
-			for(Map.Entry<Long, int[]> entry:prevThreadStatus.entrySet()){    
+			for(Map.Entry<Long,int[]> entry:prevThreadStatus.entrySet()){    
 		        int[] b=entry.getValue();  
 		        if(b[2]<b[1])
 		        {
 		        	start=b[2]+1;
 		        	end=b[1];
 		        	WriterThread thread=new WriterThread(fileName);
-					threadStatus.put((long) thread.hashCode(),new int[] {start,end,start-1});
+					threadStatus.put((long)(thread.hashCode()),new int[] {start,end,start-1});
 					thread.setIndex(start, end,threadStatus);
 					execService.execute(thread);
 		        }
@@ -96,6 +95,8 @@ public class Main {
 		}
 		else
 		{
+			System.out.print("Enter Number of Thread:");
+			int numOfThread=sc.nextInt();
 			File file=new File(fileName);
 			pageCalculations(numRecords,numPage,remRecords,numOfThread,file);
 			int numOfRecord=numRecords.intValue();
@@ -107,7 +108,7 @@ public class Main {
 				start=i*numPages+1;
 				end=start+numPages-1;
 				WriterThread thread=new WriterThread(fileName);
-				threadStatus.put((long) thread.hashCode(),new int[] {start,end,start-1});
+				threadStatus.put((long)(thread.hashCode()),new int[] {start,end,start-1});
 				thread.setIndex(start, end,threadStatus);
 				execService.execute(thread);
 			}
@@ -116,7 +117,7 @@ public class Main {
 				start=numOfRecord-remainingRecord+1;
 				end=numOfRecord-remainingRecord+1;
 				WriterThread thread=new WriterThread(fileName);
-				threadStatus.put((long) thread.hashCode(),new int[] {start,end,start});
+				threadStatus.put((long)(thread.hashCode()),new int[] {start,end,start});
 				thread.setIndex(start, end,threadStatus);
 				execService.execute(thread);
 				remainingRecord--;

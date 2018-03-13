@@ -9,10 +9,13 @@ import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.HashMap;
 
+
+
 import com.opencsv.CSVReader;
 import com.opencsv.CSVReaderBuilder;
 public class WriterThread implements Runnable {
 	String fileName;
+	long threadHashCode;
 	HashMap<Long, int[]> threadStatus;
 	int start,end;
 	private void serialize()
@@ -52,7 +55,7 @@ public class WriterThread implements Runnable {
 				    ps.setInt(5,Integer.parseInt(data[4]));
 				    int r=ps.executeUpdate();
 				    if(r==1) {
-				    	int[] recordStatus=threadStatus.get((long)this.hashCode());
+				    	int[] recordStatus=threadStatus.get(threadHashCode);
 						recordStatus[2]+=1;
 				    	System.out.println("/****************************************Processed  " +i+ "th Record********************************************************************************/");
 			    	}
@@ -108,6 +111,7 @@ public class WriterThread implements Runnable {
 	}
 	WriterThread(String file)
 	{
+		threadHashCode=this.hashCode();
 		fileName=file;
 	}
 }
