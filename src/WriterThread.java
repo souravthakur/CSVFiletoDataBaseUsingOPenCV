@@ -22,7 +22,7 @@ public class WriterThread implements Runnable {
 	{
 		PreparedStatement ps=null;
 		try {
-			ps=con.prepareStatement("insert into errormsg values(?,?)");
+			ps=con.prepareStatement("insert into errortable values(?,?)");
 			ps.setInt(1, rownum);
 			ps.setString(2, e.getMessage());
 			if(ps.executeUpdate()==1)
