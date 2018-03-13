@@ -1,9 +1,12 @@
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.LineNumberReader;
 import java.io.ObjectInputStream;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
@@ -35,74 +38,114 @@ public class Main {
 	}
 	private static final int NO_OF_CORES=2;
 	@SuppressWarnings("unchecked")
-	public static void deSerialize() {
-		HashMap<Long, int[]> e = null;
-		 try
-		 {
-		 FileInputStream fileIn = new FileInputStream("ser_files/write_record.ser");
-		 ObjectInputStream in = new ObjectInputStream(fileIn);
-		 e = (HashMap<Long, int[]>) in.readObject();
-		 in.close();
-		 fileIn.close();
-		 }catch(IOException i)
-		 {
-		 i.printStackTrace();
-		 return;
-		 }catch(ClassNotFoundException c)
-		 {
-		 System.out.println("Employee class not found");
-		 c.printStackTrace();
-		 return;
-		 }
-		 for(Map.Entry<Long, int[]> entry:e.entrySet()){    
-		        Long key=entry.getKey();  
-		        int[] b=entry.getValue();  
-		        System.out.println(key+" Details:");  
-		        System.out.println(b[0]+" "+b[1]+" "+b[2]);   
-		    }
+	private static boolean deSerialize(HashMap<Long, int[]> prevThreadStatus) {
+		boolean status=false;
+		File file=new File("ser_files/write_record.ser");
+		if(file.exists())
+		{
+			try {
+				FileInputStream fileIn = new FileInputStream("ser_files/write_record.ser");
+				ObjectInputStream in = new ObjectInputStream(fileIn);
+				prevThreadStatus = (HashMap<Long, int[]>) in.readObject();
+				in.close();
+				fileIn.close();
+			} catch (FileNotFoundException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (ClassNotFoundException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			status=true;
+		}
+		return status;
 	}
+	@SuppressWarnings("null")
 	public static void main(String[] args) {
 		// TODO Auto-generated method stub
-		deSerialize();
-		System.out.print("Enter Number of Thread:");
-		HashMap<Long,int[]> threadStatus=new HashMap<Long,int[]>();
-		Scanner sc=new Scanner(System.in);
-		int numOfThread=sc.nextInt();
-		Instant starttime = Instant.now();
+		HashMap<Long, int[]> prevThreadStatus=null;
 		String fileName="doc/pg5.csv";
-		File file=new File(fileName);
 		MutableInt numRecords = new MutableInt();
 		MutableInt numPage=new MutableInt();
 		MutableInt remRecords=new MutableInt();
-		pageCalculations(numRecords,numPage,remRecords,numOfThread,file);
-		int numOfRecord=numRecords.intValue();
-		int numPages=numPage.intValue();
-		int remainingRecord=remRecords.intValue();
+		int remainingRecord;
+		HashMap<Long,int[]> threadStatus=new HashMap<Long,int[]>();
 		ExecutorService execService=Executors.newFixedThreadPool(NO_OF_CORES);
 		int start,end;
-		int i;
-		for(i=0;i<numOfThread;i++)
+		System.out.print("Enter Number of Thread:");
+		Scanner sc=new Scanner(System.in);
+		int numOfThread=sc.nextInt();
+		Instant starttime = Instant.now();
+		if(deSerialize(prevThreadStatus))
 		{
-			start=i*numPages+1;
-			end=start+numPages-1;
-			WriterThread thread=new WriterThread(fileName);
-			threadStatus.put((long) thread.hashCode(),new int[] {start,end,0});
-			thread.setIndex(start, end,threadStatus);
-			execService.execute(thread);
+			for(Map.Entry<Long, int[]> entry:prevThreadStatus.entrySet()){    
+		        int[] b=entry.getValue();  
+		        if(b[2]<b[1])
+		        {
+		        	start=b[2]+1;
+		        	end=b[1];
+		        	WriterThread thread=new WriterThread(fileName);
+					threadStatus.put((long) thread.hashCode(),new int[] {start,end,start-1});
+					thread.setIndex(start, end,threadStatus);
+					execService.execute(thread);
+		        }
+		    }
 		}
-		while(remainingRecord!=0)
+		else
 		{
-			start=numOfRecord-remainingRecord+1;
-			end=numOfRecord-remainingRecord+1;
-			WriterThread thread=new WriterThread(fileName);
-			threadStatus.put((long) thread.hashCode(),new int[] {start,end,0});
-			thread.setIndex(start, end,threadStatus);
-			execService.execute(thread);
-			remainingRecord--;
-		}
+			File file=new File(fileName);
+			pageCalculations(numRecords,numPage,remRecords,numOfThread,file);
+			int numOfRecord=numRecords.intValue();
+			int numPages=numPage.intValue();
+			remainingRecord=remRecords.intValue();
+			int i;
+			for(i=0;i<numOfThread;i++)
+			{
+				start=i*numPages+1;
+				end=start+numPages-1;
+				WriterThread thread=new WriterThread(fileName);
+				threadStatus.put((long) thread.hashCode(),new int[] {start,end,start-1});
+				thread.setIndex(start, end,threadStatus);
+				execService.execute(thread);
+			}
+			while(remainingRecord!=0)
+			{
+				start=numOfRecord-remainingRecord+1;
+				end=numOfRecord-remainingRecord+1;
+				WriterThread thread=new WriterThread(fileName);
+				threadStatus.put((long) thread.hashCode(),new int[] {start,end,start});
+				thread.setIndex(start, end,threadStatus);
+				execService.execute(thread);
+				remainingRecord--;
+			}
+		}	
 		execService.shutdown();  
-		while (!execService.isTerminated()) {   }  
-		
+		while (!execService.isTerminated()) {   } 
+		boolean status=true;
+		for(Map.Entry<Long, int[]> entry:threadStatus.entrySet()){    
+	        int[] b=entry.getValue();  
+	        if(b[2]<b[1])
+	        {
+	        	status=false;
+	        	break;
+	        }
+	    }
+		if(status)
+		{
+			try {
+				if(Files.deleteIfExists(Paths.get("ser_files/write_record.ser")))
+				{
+					System.out.println("File Deleted");
+				}
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			
+		}
 		sc.close();
 		Instant endtime = Instant.now();
 		System.out.println(Duration.between(starttime, endtime));
