@@ -5,8 +5,13 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.LineNumberReader;
 import java.io.ObjectInputStream;
+import java.io.Reader;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
@@ -16,8 +21,67 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import org.apache.commons.lang.mutable.MutableInt;
+import org.apache.log4j.Logger;
+
+import com.opencsv.CSVReader;
+import com.opencsv.CSVReaderBuilder;
 
 public class Main {
+	private static HashMap<String,String[]> tableDescription()
+	{
+		HashMap<String,String[]> tableMappingDesc=new HashMap<String,String[]>();
+		Connection con=C3P0DataSource.getInstance().getConnection();
+		try {
+			PreparedStatement pStatement=con.prepareStatement("select * from descPG ");
+			ResultSet rs=pStatement.executeQuery();
+			
+			while(rs.next())
+			{
+				tableMappingDesc.put(rs.getString(1),new String[]{rs.getString(2),rs.getString(3)});
+			}
+			
+		} catch (SQLException e1) {
+			// TODO Auto-generated catch block
+			logger.error(e1.toString());
+			
+		}
+		finally{
+			try {
+				if(con!=null)
+				{
+					con.close();
+				}
+			} catch (SQLException e) {
+				// TODO Auto-generated catch block
+				logger.error(e.toString());
+				
+			}	
+		}
+		return tableMappingDesc;
+	}
+	private static HashMap<String,Integer> csvHeader(String fileName)
+	{
+		HashMap<String,Integer> header=new HashMap<String,Integer>();
+		CSVReader csvReader=null;
+		Reader reader;
+		try {
+			reader = Files.newBufferedReader(Paths.get(fileName));
+			csvReader =new CSVReaderBuilder(reader).build();
+			String[] data;
+			data=csvReader.readNext();
+			for(int j=0;j<data.length;j++)
+			{
+				header.put(data[j].toUpperCase(), j);
+			}
+			csvReader.close();
+			reader.close();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			logger.error(e.toString());
+		}		 		    
+			
+		return header;
+	}
 	private static void pageCalculations(MutableInt numOfRecord,MutableInt numPages,MutableInt remainingRecord,int numOfThread,File file) {
 		numOfRecord.setValue(countLineNumber(file));
 		numPages.setValue((numOfRecord.intValue())/numOfThread);
@@ -32,11 +96,12 @@ public class Main {
 	        lines = lineNumberReader.getLineNumber();
 	      	lineNumberReader.close();
 		}catch (IOException e) {
-	        System.out.println("IOException Occurred" + e.getMessage());
+	        logger.error(e.toString());
 	    }
 		return lines-1;
 	}
 	private static final int NO_OF_CORES=2;
+	final static Logger logger = Logger.getLogger("Global Logger");
 	@SuppressWarnings("unchecked")
 	private static HashMap<Long, int[]> deSerialize() {
 		HashMap<Long, int[]> prevThreadStatus=null;
@@ -52,17 +117,16 @@ public class Main {
 				
 			} catch (FileNotFoundException e) {
 				// TODO Auto-generated catch block
-				e.printStackTrace();
+				logger.error(e.toString());
 			} catch (IOException e) {
 				// TODO Auto-generated catch block
-				e.printStackTrace();
+				logger.error(e.toString());
 			} catch (ClassNotFoundException e) {
 				// TODO Auto-generated catch block
-				e.printStackTrace();
+				logger.error(e.toString());
 			}
 			
 		}
-		
 		return prevThreadStatus;
 	}
 	public static void main(String[] args) {
@@ -74,6 +138,8 @@ public class Main {
 		MutableInt numPage=new MutableInt();
 		MutableInt remRecords=new MutableInt();
 		int remainingRecord;
+		HashMap<String,Integer> header=csvHeader(fileName);
+		HashMap<String,String[]> tableMappingDesc=tableDescription();
 		HashMap<Long,int[]> threadStatus=new HashMap<Long,int[]>();
 		ExecutorService execService=Executors.newFixedThreadPool(NO_OF_CORES);
 		int start,end;
@@ -86,7 +152,7 @@ public class Main {
 		        {
 		        	start=b[2]+1;
 		        	end=b[1];
-		        	WriterThread thread=new WriterThread(fileName);
+		        	WriterThread thread=new WriterThread(fileName,header,tableMappingDesc);
 					threadStatus.put((long)(thread.hashCode()),new int[] {start,end,start-1});
 					thread.setIndex(start, end,threadStatus);
 					execService.execute(thread);
@@ -107,7 +173,7 @@ public class Main {
 			{
 				start=i*numPages+1;
 				end=start+numPages-1;
-				WriterThread thread=new WriterThread(fileName);
+				WriterThread thread=new WriterThread(fileName,header,tableMappingDesc);
 				threadStatus.put((long)(thread.hashCode()),new int[] {start,end,start-1});
 				thread.setIndex(start, end,threadStatus);
 				execService.execute(thread);
@@ -116,7 +182,7 @@ public class Main {
 			{
 				start=numOfRecord-remainingRecord+1;
 				end=numOfRecord-remainingRecord+1;
-				WriterThread thread=new WriterThread(fileName);
+				WriterThread thread=new WriterThread(fileName,header,tableMappingDesc);
 				threadStatus.put((long)(thread.hashCode()),new int[] {start,end,start});
 				thread.setIndex(start, end,threadStatus);
 				execService.execute(thread);
@@ -139,16 +205,17 @@ public class Main {
 			try {
 				if(Files.deleteIfExists(Paths.get("ser_files/write_record.ser")))
 				{
-					System.out.println("File Deleted");
+					logger.info("Ser File Deleted");
 				}
 			} catch (IOException e) {
 				// TODO Auto-generated catch block
-				e.printStackTrace();
+				logger.error(e.toString());
 			}
 			
 		}
 		sc.close();
 		Instant endtime = Instant.now();
+		logger.info(Duration.between(starttime, endtime));
 		System.out.println(Duration.between(starttime, endtime));
 	}
 }

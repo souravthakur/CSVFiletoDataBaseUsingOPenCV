@@ -2,13 +2,15 @@ import java.beans.PropertyVetoException;
 import java.sql.Connection;
 import java.sql.SQLException;
 
+import org.apache.log4j.Logger;
+
 import com.mchange.v2.c3p0.ComboPooledDataSource;
 
 
 public class C3P0DataSource {
    private static C3P0DataSource dataSource;
    private ComboPooledDataSource comboPooledDataSource;
-
+   final Logger logger = Logger.getLogger("Global Logger");
    private C3P0DataSource() {
       try {
          comboPooledDataSource = new ComboPooledDataSource();
@@ -20,7 +22,7 @@ public class C3P0DataSource {
          comboPooledDataSource.setPassword("1234");
       }
       catch (PropertyVetoException ex1) {
-         ex1.printStackTrace();
+        logger.error(ex1.toString());
       }
    }
 
@@ -35,7 +37,7 @@ public class C3P0DataSource {
       try {
          con = comboPooledDataSource.getConnection();
       } catch (SQLException e) {
-         e.printStackTrace();
+         logger.error(e.toString());
       }
       return con;
    }
