@@ -8,6 +8,6 @@
 	<classpathentry kind="lib" path="C:/Users/AmanKumar/eclipse-workspace/OpenCSVReader/lib/ojdbc6.jar"/>
 	<classpathentry kind="lib" path="C:/Users/AmanKumar/eclipse-workspace/OpenCSVReader/lib/opencsv-4.1.jar"/>
 	<classpathentry kind="lib" path="C:/Users/AmanKumar/eclipse-workspace/OpenCSVReader/lib/org-apache-commons-lang.jar"/>
-	<classpathentry kind="lib" path="C:/Users/AmanKumar/eclipse-workspace/CSvtoDatabaseMultiThread(OpenCSV)/lib/log4j-1.2.17.jar"/>
+	<classpathentry kind="lib" path="C:/Users/AmanKumar/eclipse-workspace/OpenCSVReader/lib/log4j-1.2.17.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
