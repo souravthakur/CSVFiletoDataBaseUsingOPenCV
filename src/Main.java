@@ -12,6 +12,7 @@ import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
@@ -28,17 +29,52 @@ import com.opencsv.CSVReader;
 import com.opencsv.CSVReaderBuilder;
 
 public class Main {
-	private static HashMap<String,String[]> tableDescription()
+	private static  String SQL="";
+	private static final String TABLE_NAME="PG";
+	private static final String DESC_TABLE_NAME="DESCPG";
+	private static HashMap<String,Integer> tableMetaData()
 	{
-		HashMap<String,String[]> tableMappingDesc=new HashMap<String,String[]>();
+		HashMap<String,Integer> tableMeta=new HashMap<String,Integer>();
 		Connection con=C3P0DataSource.getInstance().getConnection();
 		try {
-			PreparedStatement pStatement=con.prepareStatement("select * from descPG ");
-			ResultSet rs=pStatement.executeQuery();
+			PreparedStatement pStatement=con.prepareStatement("select * from "+TABLE_NAME);
+			ResultSetMetaData rsmd=pStatement.getMetaData();
+			SQL="insert into "+TABLE_NAME+" values(";
+			for(int i=1;i<=rsmd.getColumnCount();i++)
+			{	
+				if(i>1)
+				{
+					SQL+=",";
+				}
+				SQL+="?";
+				tableMeta.put(rsmd.getColumnName(i),i);
+			}
 			
+			SQL+=")";
+			
+		} catch (SQLException e1) {
+			// TODO Auto-generated catch block
+			logger.error(e1.toString());
+			
+		}
+		return tableMeta;
+	}
+	private static HashMap<String,HashMap<String,String>> tableDescription()
+	{
+		HashMap<String,HashMap<String,String>> tableMappingDesc=new HashMap<String,HashMap<String,String>>();
+		Connection con=C3P0DataSource.getInstance().getConnection();
+		try {
+			PreparedStatement pStatement=con.prepareStatement("select * from "+DESC_TABLE_NAME);
+			ResultSet rs=pStatement.executeQuery();
+			HashMap<String,String> dbDesc=null;
 			while(rs.next())
-			{
-				tableMappingDesc.put(rs.getString(1),new String[]{rs.getString(2),rs.getString(3)});
+			{	dbDesc=tableMappingDesc.get(rs.getString(1));
+				if(dbDesc==null)
+				{
+					dbDesc=new HashMap<String,String>();
+				}
+				dbDesc.put(rs.getString(1),rs.getString(3));
+				tableMappingDesc.put(rs.getString(2),dbDesc);
 			}
 			
 		} catch (SQLException e1) {
@@ -72,7 +108,7 @@ public class Main {
 			data=csvReader.readNext();
 			for(int j=0;j<data.length;j++)
 			{
-				header.put(data[j].toUpperCase(), j);
+				header.put(data[j], j);
 			}
 			csvReader.close();
 			reader.close();
@@ -139,8 +175,9 @@ public class Main {
 		MutableInt numPage=new MutableInt();
 		MutableInt remRecords=new MutableInt();
 		int remainingRecord;
+		HashMap<String,Integer> tableMetaData=tableMetaData();
 		HashMap<String,Integer> header=csvHeader(fileName);
-		HashMap<String,String[]> tableMappingDesc=tableDescription();
+		HashMap<String,HashMap<String,String>> tableMappingDesc=tableDescription();
 		HashMap<Long,int[]> threadStatus=new HashMap<Long,int[]>();
 		ExecutorService execService=Executors.newFixedThreadPool(NO_OF_CORES);
 		int start,end;
@@ -153,7 +190,7 @@ public class Main {
 		        {
 		        	start=b[2]+1;
 		        	end=b[1];
-		        	WriterThread thread=new WriterThread(fileName,header,tableMappingDesc);
+		        	WriterThread thread=new WriterThread(fileName,SQL,header,tableMappingDesc,tableMetaData);
 					threadStatus.put((long)(thread.hashCode()),new int[] {start,end,start-1});
 					thread.setIndex(start, end,threadStatus);
 					execService.execute(thread);
@@ -174,7 +211,7 @@ public class Main {
 			{
 				start=i*numPages+1;
 				end=start+numPages-1;
-				WriterThread thread=new WriterThread(fileName,header,tableMappingDesc);
+				WriterThread thread=new WriterThread(fileName,SQL,header,tableMappingDesc,tableMetaData);
 				threadStatus.put((long)(thread.hashCode()),new int[] {start,end,start-1});
 				thread.setIndex(start, end,threadStatus);
 				execService.execute(thread);
@@ -183,7 +220,7 @@ public class Main {
 			{
 				start=numOfRecord-remainingRecord+1;
 				end=numOfRecord-remainingRecord+1;
-				WriterThread thread=new WriterThread(fileName,header,tableMappingDesc);
+				WriterThread thread=new WriterThread(fileName,SQL,header,tableMappingDesc,tableMetaData);
 				threadStatus.put((long)(thread.hashCode()),new int[] {start,end,start});
 				thread.setIndex(start, end,threadStatus);
 				execService.execute(thread);

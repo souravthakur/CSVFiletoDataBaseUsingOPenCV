@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.ObjectOutputStream;
 import java.io.Reader;
+import java.math.BigDecimal;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CodingErrorAction;
@@ -20,54 +21,15 @@ import com.opencsv.CSVReaderBuilder;
 public class WriterThread implements Runnable {
 	String fileName;
 	long threadHashCode;
+	String sql;
 	HashMap<String,Integer> header;
-	HashMap<String,String[]> tableMappingDesc;
+	HashMap<String,Integer> tableMetaData;
+	HashMap<String,HashMap<String,String>> tableMappingDesc;
 	HashMap<Long, int[]> threadStatus;
 	int start,end;
 	final Logger logger = Logger.getLogger("Global Logger");
-	private synchronized String sqlBuilder(String[] data)
-	{
-		String sql="insert into PG";
-		String col="(";
-		String coldata="values(";
-		int i=0;
-		String[] desc;
-		for(Map.Entry<String, String[]> entry:tableMappingDesc.entrySet())
-		{
-			if(i>0)
-			{
-				col+=",";
-				coldata+=",";
-			}
-			desc=entry.getValue();
-			col+=desc[0];
-			coldata+=colTypeModifier(desc[1],data[header.get(entry.getKey().toUpperCase())]);
-			i++;
-		}
-		col=col+")";
-		coldata=coldata+")";
-		sql=sql+col+coldata;
-		return sql;
-	}
-	private synchronized String colTypeModifier(String colDatabaseDataType,String csvColData)
-	{
-		String result="";
-		switch(colDatabaseDataType)
-		{
-			case "VARCHAR2":
-			case "CHAR":
-			case "NVARCHAR2":
-			case "CLOB":
-			case "NLOB":
-			case "NCHAR":
-			case "DATE":
-				result="'"+csvColData+"'";
-				break;
-			default:
-				result=csvColData;
-		}
-		return result;
-	}
+	
+
 	private synchronized void errorinfo(Connection con,Exception e,int rownum)
 	{
 		PreparedStatement ps=null;
@@ -114,12 +76,31 @@ public class WriterThread implements Runnable {
  			PreparedStatement ps=null;
  			for(long i=start;i<=end;i++)
  			{  
- 				String[] data=csvReader.readNext();
+ 				Object[] data=csvReader.readNext();
 			    try 
 			    {
-			    	String sql=sqlBuilder(data);
 			    	ps=con.prepareStatement(sql);
+			    	//ps.setObject(parameterIndex, x);
+			    	for(Map.Entry<String, HashMap<String,String>> mapEntry:tableMappingDesc.entrySet())
+			    	{
+			    		
+			    		HashMap<String,String> csvHeader=mapEntry.getValue();
+			    		for(Map.Entry<String,String> entry:csvHeader.entrySet())
+			    		{
+			    			DbDataTypeEnum var=DbDataTypeEnum.valueOf(entry.getValue());
+			    			if(var.getter().equals(BigDecimal.class))
+			    			{
+			    				ps.setBigDecimal(tableMetaData.get(mapEntry.getKey()), new BigDecimal((String)data[header.get(entry.getKey())]));
+			    			}
+			    			else
+			    			{
+			    				ps.setObject(tableMetaData.get(mapEntry.getKey()), var.getter().cast(data[header.get(entry.getKey())]));
+			    			}
+			    			
+			    		}
+			    	}
 				    int r=ps.executeUpdate();
+				   
 				    if(r==1) {
 				    	int[] recordStatus=threadStatus.get(threadHashCode);
 						recordStatus[2]+=1;
@@ -157,6 +138,7 @@ public class WriterThread implements Runnable {
  			try {
  				if(con!=null)
  				{
+ 					con.commit();
  					con.close();
  				}
  				if(csvReader!=null)
@@ -179,11 +161,13 @@ public class WriterThread implements Runnable {
 		start=s;
 		end=e;
 	}
-	WriterThread(String file,HashMap<String,Integer> header,HashMap<String,String[]> tableMappingDesc)
+	WriterThread(String file,String sql,HashMap<String,Integer> header,HashMap<String,HashMap<String,String>> tableMappingDesc,HashMap<String,Integer> tableMetaData)
 	{
+		this.tableMetaData=tableMetaData;
 		this.tableMappingDesc=tableMappingDesc;
 		this.header=header;
 		threadHashCode=this.hashCode();
 		fileName=file;
+		this.sql=sql;
 	}
 }
